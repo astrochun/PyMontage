@@ -15,16 +15,42 @@ from astropy.io import ascii as asc
 from astropy.io import fits
 
 import numpy as np
-import array, time, sets
-
-import matplotlib.pyplot as plt
 import glob
 
-from astropy.table import Table
+import astropy.units as u
+from astropy.wcs import WCS
+from astropy import wcs
 
+import montage_wrapper as montage
 
-def main(fitsfile=None, imgdir=None, silent=True, verbose=False,
-         catalog='SDSS'):
+def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
+                         ysize=5*u.arcmin):
+    
+    keywords0 = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2', 'CTYPE1',
+                 'CTYPE2', 'CRVAL1', 'CRVAL2', 'CDELT1', 'CDELT2', 'CRPIX1',
+                 'CRPIX2', 'CROTA2']
+
+    ra0, dec0 = c0.ra.value, c0.dec.value
+    nx = np.int(np.ceil((xsize.to(u.arcsec) / pscale.to(u.arcsec)).value))
+    ny = np.int(np.ceil((ysize.to(u.arcsec) / pscale.to(u.arcsec)).value))
+
+    values0   = ['T', -64, 2, nx, ny, "'RA---TAN'", "'DEC--TAN'", ra0, dec0,
+                 pscale.to(u.degree).value, pscale.to(u.degree).value,
+                 nx/2, ny/2, 0.0]
+
+    txt0 = [a+' = '+str(b) for a,b in zip(keywords0,values0)]
+    
+    outfile = imgdir + 'template.hdr'
+    thefile = open(outfile, 'w')
+    for item in txt0: thefile.write(item+'\n')
+    thefile.write('END')
+    thefile.close()
+
+    return outfile
+#enddef
+
+def main(c0, fitsfile=None, imgdir=None, xsize=5*u.arcmin, ysize=5*u.arcmin,
+         silent=True, verbose=False, catalog='SDSS'):
     '''
     Main function for montage_reproj
 
@@ -72,8 +98,28 @@ def main(fitsfile=None, imgdir=None, silent=True, verbose=False,
             for ii in range(n_images):
                 hdu[ii].writeto(imgdir+'im'+str(ii)+'.fits', clobber=True)
 
+    t_files = glob.glob(imgdir+'*.fits')
+    w0 = WCS(t_files[0])
+    pscale0 = np.max(wcs.utils.proj_plane_pixel_scales(w0) * 3600.0) * u.arcsec
+     
+    template_header = make_template_header(imgdir, c0, pscale=pscale0,
+                                           xsize=xsize, ysize=ysize)
     imgtable = imgdir+'im.tbl'
     montage.mImgtbl(imgdir, imgtable)
+
+    proj_dir    = imgdir+'projdir/'
+    stats_table = proj_dir + 'stats.tbl'
+
+    if not exists(proj_dir): os.mkdir(proj_dir)
+    montage.mProjExec(imgtable, template_header, proj_dir, stats_table,
+                      raw_dir=imgdir)
+
+    proj_imtable = proj_dir+'im.tbl'
+    montage.mImgtbl(projdir, proj_imtable)
+
+    out_image = imgdir+'final.uncorrected.fits'
+    print out_image
+    montage.mAdd(proj_imtable, template_header, out_image, img_dir=proj_dir)
 
     if silent == False:
         print '### End montage_reproj.main | '+systime()
