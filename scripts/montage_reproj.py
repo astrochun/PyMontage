@@ -24,8 +24,46 @@ from astropy import wcs
 import montage_wrapper as montage
 
 def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
-                         ysize=5*u.arcmin):
+                         ysize=5*u.arcmin, silent=True, verbose=False):
+    '''
+    Function to generate ASCII file containing the template header for
+    Montage tools
+
+    Parameters
+    ----------
+    imgdir: string
+      Full path to where images are located. Default: None.
+      Either sspecify this or fitsfile, but not both
+
+    c0 : `astropy.coordinates` object
+      Central coordinate of target
+
+    pscale : astropy.units quantity, optional
+      Pixel scale. Default: 0.2 arcsec
+
+    xsize : astropy.units quantity, optional
+      Size of desired image in RA. Default: 5 arcmin
+
+    ysize : astropy.units quantity, optional
+      Size of desired image in Dec. Default: 5 arcmin
+
+    silent : boolean
+      Turns off stdout messages. Default: True
+
+    verbose : boolean
+      Turns on additional stdout messages. Default: False
+	  
+    Returns
+    -------
+
+    Notes
+    -----
+    Created by Chun Ly, 2 January 2017
+    '''
     
+    if silent == False:
+        print '### Begin montage_reproj.make_template_header | '+systime()
+
     keywords0 = ['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2', 'CTYPE1',
                  'CTYPE2', 'CRVAL1', 'CRVAL2', 'CDELT1', 'CDELT2', 'CRPIX1',
                  'CRPIX2', 'CROTA2']
@@ -34,9 +72,9 @@ def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
     nx = np.int(np.ceil((xsize.to(u.arcsec) / pscale.to(u.arcsec)).value))
     ny = np.int(np.ceil((ysize.to(u.arcsec) / pscale.to(u.arcsec)).value))
 
-    values0   = ['T', -64, 2, nx, ny, "'RA---TAN'", "'DEC--TAN'", ra0, dec0,
-                 pscale.to(u.degree).value, pscale.to(u.degree).value,
-                 nx/2, ny/2, 0.0]
+    values0 = ['T', -64, 2, nx, ny, "'RA---TAN'", "'DEC--TAN'", ra0, dec0,
+               pscale.to(u.degree).value, pscale.to(u.degree).value,
+               nx/2, ny/2, 0.0]
 
     txt0 = [a+' = '+str(b) for a,b in zip(keywords0,values0)]
     
@@ -45,6 +83,9 @@ def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
     for item in txt0: thefile.write(item+'\n')
     thefile.write('END')
     thefile.close()
+
+    if silent == False:
+        print '### End montage_reproj.make_template_header | '+systime()
 
     return outfile
 #enddef
