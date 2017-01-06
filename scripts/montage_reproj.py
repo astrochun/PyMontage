@@ -90,8 +90,8 @@ def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
     return outfile
 #enddef
 
-def main(c0, fitsfile=None, imgdir=None, xsize=5*u.arcmin, ysize=5*u.arcmin,
-         silent=True, verbose=False, catalog='SDSS'):
+def main(c0, fitsfile=None, imgdir=None, out_image=None, xsize=5*u.arcmin,
+         ysize=5*u.arcmin, silent=True, verbose=False, catalog='SDSS'):
     '''
     Main function for montage_reproj
 
@@ -103,7 +103,11 @@ def main(c0, fitsfile=None, imgdir=None, xsize=5*u.arcmin, ysize=5*u.arcmin,
 
     imgdir: string
       Full path to where images are located. Default: None.
-      Either sspecify this or fitsfile, but not both
+      Either specify this or fitsfile, but not both
+
+    out_image : string
+      Filename of output FITS file. Default is a "final.uncorrected.fits" file
+      placed in imgdir or "/var/tmp/montage"
 
     silent : boolean
       Turns off stdout messages. Default: True
@@ -121,6 +125,10 @@ def main(c0, fitsfile=None, imgdir=None, xsize=5*u.arcmin, ysize=5*u.arcmin,
     Notes
     -----
     Created by Chun Ly, 2 January 2017
+    Modified by Chun Ly, 6 January 2017
+     - Added out_image keyword option
+     - Set ignore=True for call to mProjExec() to avoid crash
+     - Delete files to have a fresh start at end of each case
     '''
 
     if silent == False:
@@ -139,28 +147,34 @@ def main(c0, fitsfile=None, imgdir=None, xsize=5*u.arcmin, ysize=5*u.arcmin,
             for ii in range(n_images):
                 hdu[ii].writeto(imgdir+'im'+str(ii)+'.fits', clobber=True)
 
-    t_files = glob.glob(imgdir+'*.fits')
-    w0 = WCS(t_files[0])
-    pscale0 = np.max(wcs.utils.proj_plane_pixel_scales(w0) * 3600.0) * u.arcsec
-     
-    template_header = make_template_header(imgdir, c0, pscale=pscale0,
-                                           xsize=xsize, ysize=ysize)
-    imgtable = imgdir+'im.tbl'
-    montage.mImgtbl(imgdir, imgtable)
+    #Mod on 06/01/2017 to handle only multiple images case, output, file deletion
+    if n_images > 1:
+        t_files = glob.glob(imgdir+'*.fits')
+        w0 = WCS(t_files[0])
+        pscale0 = np.max(wcs.utils.proj_plane_pixel_scales(w0) * 3600.0) * u.arcsec
 
-    proj_dir    = imgdir+'projdir/'
-    stats_table = proj_dir + 'stats.tbl'
+        template_header = make_template_header(imgdir, c0, pscale=pscale0,
+                                               xsize=xsize, ysize=ysize)
+        imgtable = imgdir+'im.tbl'
+        montage.mImgtbl(imgdir, imgtable)
 
-    if not exists(proj_dir): os.mkdir(proj_dir)
-    montage.mProjExec(imgtable, template_header, proj_dir, stats_table,
-                      raw_dir=imgdir)
+        projdir = imgdir+'projdir/'
+        if not exists(projdir): os.mkdir(projdir)
 
-    proj_imtable = proj_dir+'im.tbl'
-    montage.mImgtbl(projdir, proj_imtable)
+        stats_table = projdir + 'stats.tbl'
 
-    out_image = imgdir+'final.uncorrected.fits'
-    print out_image
-    montage.mAdd(proj_imtable, template_header, out_image, img_dir=proj_dir)
+        # Mod on 06/01/2017 to handle bug with Montage. Ignore stderr
+        montage.mProjExec(imgtable, template_header, projdir, stats_table,
+                          raw_dir=imgdir, ignore=True)
+
+        proj_imtable = projdir+'im.tbl'
+        montage.mImgtbl(projdir, proj_imtable)
+
+        if out_image == None:
+            out_image = imgdir+'final.uncorrected.fits'
+
+        montage.mAdd(proj_imtable, template_header, out_image, img_dir=projdir)
+        os.system('rm -rf '+imgdir+'im*fits *.tbl *.hdr projdir')
 
     if silent == False:
         print '### End montage_reproj.main | '+systime()
