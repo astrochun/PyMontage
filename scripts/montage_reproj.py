@@ -59,6 +59,8 @@ def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
     Notes
     -----
     Created by Chun Ly, 2 January 2017
+    Modified by Chun Ly, 6 January 2017
+     - Bug in sign for CDELT1. Needs to be negative: E to the left.
     '''
     
     if silent == False:
@@ -73,7 +75,7 @@ def make_template_header(imgdir, c0, pscale=0.2*u.arcsec, xsize=5*u.arcmin,
     ny = np.int(np.ceil((ysize.to(u.arcsec) / pscale.to(u.arcsec)).value))
 
     values0 = ['T', -64, 2, nx, ny, "'RA---TAN'", "'DEC--TAN'", ra0, dec0,
-               pscale.to(u.degree).value, pscale.to(u.degree).value,
+               -1*pscale.to(u.degree).value, pscale.to(u.degree).value,
                nx/2, ny/2, 0.0]
 
     txt0 = [a+' = '+str(b) for a,b in zip(keywords0,values0)]
