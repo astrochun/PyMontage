@@ -140,43 +140,50 @@ def main(c0, fitsfile=None, imgdir=None, out_image=None, xsize=5*u.arcmin,
         imgdir = '/var/tmp/montage/'
         if not exists(imgdir): os.mkdir(imgdir)
 
+        # Moved up on 06/01/2017
+        os.system('rm -rf '+imgdir+'im*fits *.tbl *.hdr projdir/*fits projdir/*tbl')
+
         hdu = fits.open(fitsfile)
         n_images = len(hdu)
 
         if n_images == 1:
             print '## Only one image is provided'
+            hdu.writeto(imgdir+'im'+str(0)+'.fits', clobber=True) # + on 06/01/2017
         else:
             for ii in range(n_images):
                 hdu[ii].writeto(imgdir+'im'+str(ii)+'.fits', clobber=True)
 
     #Mod on 06/01/2017 to handle only multiple images case, output, file deletion
+    t_files = glob.glob(imgdir+'*.fits')
+    w0 = WCS(t_files[0])
+    pscale0 = np.max(wcs.utils.proj_plane_pixel_scales(w0) * 3600.0) * u.arcsec
+
+    template_header = make_template_header(imgdir, c0, pscale=pscale0,
+                                           xsize=xsize, ysize=ysize)
+    imgtable = imgdir+'im.tbl'
+    montage.mImgtbl(imgdir, imgtable)
+
+    projdir = imgdir+'projdir/'
+    if not exists(projdir): os.mkdir(projdir)
+
+    stats_table = projdir + 'stats.tbl'
+
+    # Mod on 06/01/2017 to handle bug with Montage. Ignore stderr
+    montage.mProjExec(imgtable, template_header, projdir, stats_table,
+                      raw_dir=imgdir, ignore=True)
+
+    if out_image == None:
+        out_image = imgdir+'final.uncorrected.fits'
+
     if n_images > 1:
-        t_files = glob.glob(imgdir+'*.fits')
-        w0 = WCS(t_files[0])
-        pscale0 = np.max(wcs.utils.proj_plane_pixel_scales(w0) * 3600.0) * u.arcsec
-
-        template_header = make_template_header(imgdir, c0, pscale=pscale0,
-                                               xsize=xsize, ysize=ysize)
-        imgtable = imgdir+'im.tbl'
-        montage.mImgtbl(imgdir, imgtable)
-
-        projdir = imgdir+'projdir/'
-        if not exists(projdir): os.mkdir(projdir)
-
-        stats_table = projdir + 'stats.tbl'
-
-        # Mod on 06/01/2017 to handle bug with Montage. Ignore stderr
-        montage.mProjExec(imgtable, template_header, projdir, stats_table,
-                          raw_dir=imgdir, ignore=True)
-
         proj_imtable = projdir+'im.tbl'
         montage.mImgtbl(projdir, proj_imtable)
 
-        if out_image == None:
-            out_image = imgdir+'final.uncorrected.fits'
-
         montage.mAdd(proj_imtable, template_header, out_image, img_dir=projdir)
-        os.system('rm -rf '+imgdir+'im*fits *.tbl *.hdr projdir')
+
+    if n_images == 1:
+        proj_file = glob.glob(projdir+'*im0.fits')[0]
+        os.system('cp -p '+proj_file+' '+out_image)
 
     if silent == False:
         print '### End montage_reproj.main | '+systime()
